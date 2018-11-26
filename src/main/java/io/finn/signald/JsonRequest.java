@@ -40,6 +40,9 @@ class JsonRequest {
     public String groupName;
     public List<String> members;
     public String avatar;
+    public JsonQuote quote;
+    public int expiresInSeconds;
+    public String fingerprint;
 
     JsonRequest() {}
     @JsonCreator

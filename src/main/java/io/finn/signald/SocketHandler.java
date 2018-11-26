@@ -22,11 +22,14 @@ import org.whispersystems.signalservice.internal.util.Base64;
 import org.whispersystems.libsignal.InvalidKeyException;
 import org.whispersystems.libsignal.util.guava.Optional;
 import org.whispersystems.signalservice.api.push.ContactTokenDetails;
+import org.whispersystems.signalservice.api.messages.SignalServiceDataMessage;
+
 
 import org.asamk.signal.AttachmentInvalidException;
 import org.asamk.signal.UserAlreadyExists;
 import org.asamk.signal.GroupNotFoundException;
 import org.asamk.signal.NotAGroupMemberException;
+import org.asamk.signal.util.Hex;
 
 import java.io.IOException;
 import java.io.BufferedReader;
@@ -40,6 +43,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Map;
+import java.util.Locale;
 import java.io.File;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -146,6 +150,9 @@ public class SocketHandler implements Runnable {
       case "update_group":
         updateGroup(request);
         break;
+      case "set_expiration":
+        setExpiration(request);
+        break;
       case "list_groups":
         listGroups(request);
         break;
@@ -157,6 +164,9 @@ public class SocketHandler implements Runnable {
         break;
       case "get_identities":
         getIdentities(request);
+        break;
+      case "trust":
+        trust(request);
         break;
       case "sync_contacts":
         syncContacts(request);
@@ -174,17 +184,17 @@ public class SocketHandler implements Runnable {
     }
   }
 
-  private void send(JsonRequest request) throws IOException {
+  private void send(JsonRequest request) throws IOException, EncapsulatedExceptions, GroupNotFoundException, GroupNotFoundException, AttachmentInvalidException, NotAGroupMemberException {
     Manager manager = getManager(request.username);
-    try {
-      if(request.recipientGroupId != null) {
-        byte[] groupId = Base64.decode(request.recipientGroupId);
-        manager.sendGroupMessage(request.messageBody, request.attachmentFilenames, groupId);
-      } else {
-        manager.sendMessage(request.messageBody, request.attachmentFilenames, request.recipientNumber);
-      }
-    } catch(EncapsulatedExceptions | AttachmentInvalidException | GroupNotFoundException | NotAGroupMemberException | IOException e) {
-      logger.catching(e);
+    SignalServiceDataMessage.Quote quote = null;
+    if(request.quote != null) {
+      quote = request.quote.getQuote();
+    }
+    if(request.recipientGroupId != null) {
+      byte[] groupId = Base64.decode(request.recipientGroupId);
+      manager.sendGroupMessage(request.messageBody, request.attachmentFilenames, groupId, quote);
+    } else {
+      manager.sendMessage(request.messageBody, request.attachmentFilenames, request.recipientNumber, quote);
     }
   }
 
@@ -292,6 +302,19 @@ public class SocketHandler implements Runnable {
     }
   }
 
+  private void setExpiration(JsonRequest request) throws IOException, GroupNotFoundException, NotAGroupMemberException, AttachmentInvalidException, EncapsulatedExceptions, IOException {
+    Manager m = getManager(request.username);
+
+    if(request.recipientGroupId != null) {
+      byte[] groupId = Base64.decode(request.recipientGroupId);
+      m.setExpiration(groupId, request.expiresInSeconds);
+    } else {
+      m.setExpiration(request.recipientNumber, request.expiresInSeconds);
+    }
+
+    this.reply("expiration_updated", null, request.id);
+  }
+
   private void listGroups(JsonRequest request) throws IOException, JsonProcessingException {
     Manager m = getManager(request.username);
     this.reply("group_list", new JsonGroupList(m), request.id);
@@ -348,6 +371,31 @@ public class SocketHandler implements Runnable {
   private void getIdentities(JsonRequest request) throws IOException {
     Manager m = getManager(request.username);
     this.reply("identities", new JsonIdentityList(request.recipientNumber, m), request.id);
+  }
+
+  private void trust(JsonRequest request) throws IOException {
+    Manager m = getManager(request.username);
+    String fingerprint = request.fingerprint.replaceAll(" ", "");
+    if (fingerprint.length() == 66) {
+      byte[] fingerprintBytes;
+      fingerprintBytes = Hex.toByteArray(fingerprint.toLowerCase(Locale.ROOT));
+      boolean res = m.trustIdentityVerified(request.recipientNumber, fingerprintBytes);
+      if (!res) {
+        this.reply("trust_failed", new JsonStatusMessage(0, "Failed to set the trust for the fingerprint of this number, make sure the number and the fingerprint are correct.", request), request.id);
+      } else {
+        this.reply("trusted_fingerprint", new JsonStatusMessage(0, "Successfully trusted fingerprint", request), request.id);
+      }
+    } else if (fingerprint.length() == 60) {
+      boolean res = m.trustIdentityVerifiedSafetyNumber(request.recipientNumber, fingerprint);
+      if (!res) {
+        this.reply("trust_failed", new JsonStatusMessage(0, "Failed to set the trust for the safety number of this number, make sure the number and the safety number are correct.", request), request.id);
+      } else {
+        this.reply("trusted_safety_number", new JsonStatusMessage(0, "Successfully trusted safety number", request), request.id);
+      }
+    } else {
+      System.err.println("Fingerprint has invalid format, either specify the old hex fingerprint or the new safety number");
+      this.reply("trust_failed", new JsonStatusMessage(0, "Fingerprint has invalid format, either specify the old hex fingerprint or the new safety number", request), request.id);
+    }
   }
 
   private void syncContacts(JsonRequest request) throws IOException {
