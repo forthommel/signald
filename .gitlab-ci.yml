@@ -1,6 +1,7 @@
-image: java:8-jdk
+image: openjdk:8-jdk
 
 stages:
+  - check for updates
   - build
   - publish
   - cleanup
@@ -33,6 +34,7 @@ deb:build:
     - dpkg-buildpackage -b
     - cp -rv ../signald_${VERSION}* .
   artifacts:
+    expire_in: 1 year
     paths:
       - "signald_*"
 
@@ -54,6 +56,7 @@ deb:publish:
     - gpg --export --armor "${SIGNING_KEY}" > apt-signing-key.asc
     - for f in apt-signing-key.asc dists/${SUITE}/main/binary-amd64/signald_${VERSION}* $(find dists/ -type f | grep -v -E "\.deb$"); do mc cp -q "$f" "minio/updates.signald.org/$f"; done
   artifacts:
+    expire_in: 1 year
     paths:
       - "signald_*.sig"
   dependencies:
@@ -62,7 +65,28 @@ deb:publish:
 deb:cleanup:
   stage: cleanup
   image: registry.git.callpipe.com/finn/debian-repo-builder:latest
+  only:
+    - schedules
   before_script:
     - mc config host add minio "${MINIO_URL}" "${MINIO_ACCESS_KEY}" "${MINIO_SECRET_KEY}"
   script:
     - repo-cron minio/updates.signald.org
+
+checkupdates:gradle:
+  stage: check for updates
+  only:
+    - schedules
+    - master
+  before_script:
+    - apt-get update && apt-get install -y jq
+    - mkdir -p ~/.ssh
+    - echo "$GIT_SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+    - chmod 600 ~/.ssh/id_ed25519
+    - ssh-keygen -yf ~/.ssh/id_ed25519
+    - echo "$GITLAB_KNOWN_HOSTS" >> ~/.ssh/known_hosts
+    - git config --global user.email "upgrade-robot@signald.org"
+    - git config --global user.name "Upgrade Robot"
+    - git remote set-url origin git@git.callpipe.com:finn/signald.git
+  script:
+    - ./gradlew checkLibVersions | grep UPGRADE | cut -c 9- | tools/check-gradle-updates.sh
+  allow_failure: true
