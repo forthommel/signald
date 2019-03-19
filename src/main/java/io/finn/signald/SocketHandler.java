@@ -17,13 +17,15 @@
 
 package io.finn.signald;
 
+import org.whispersystems.signalservice.api.crypto.UntrustedIdentityException;
 import org.whispersystems.signalservice.api.push.exceptions.EncapsulatedExceptions;
 import org.whispersystems.signalservice.internal.util.Base64;
 import org.whispersystems.libsignal.InvalidKeyException;
 import org.whispersystems.libsignal.util.guava.Optional;
 import org.whispersystems.signalservice.api.push.ContactTokenDetails;
+import org.whispersystems.signalservice.api.messages.SignalServiceAttachment;
 import org.whispersystems.signalservice.api.messages.SignalServiceDataMessage;
-
+import org.whispersystems.signalservice.api.messages.SignalServiceAttachmentStream;
 
 import org.asamk.signal.AttachmentInvalidException;
 import org.asamk.signal.UserAlreadyExists;
@@ -38,6 +40,7 @@ import java.io.PrintWriter;
 import java.net.Socket;
 import java.net.URISyntaxException;
 import java.net.URI;
+import java.nio.file.Files;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeoutException;
 import java.util.List;
@@ -45,11 +48,13 @@ import java.util.ArrayList;
 import java.util.Map;
 import java.util.Locale;
 import java.io.File;
+import java.io.InputStream;
+import java.io.FileInputStream;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.PropertyAccessor;
-import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.JsonGenerator;
@@ -66,16 +71,18 @@ public class SocketHandler implements Runnable {
   private static final Logger logger = LogManager.getLogger();
   private Socket socket;
   private ArrayList<String> subscribedAccounts = new ArrayList<String>();
+  private String data_path;
 
-  public SocketHandler(Socket socket, ConcurrentHashMap<String,MessageReceiver> receivers, ConcurrentHashMap<String,Manager> managers) throws IOException {
+  public SocketHandler(Socket socket, ConcurrentHashMap<String,MessageReceiver> receivers, ConcurrentHashMap<String,Manager> managers, String data_path) throws IOException {
     this.reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
     this.writer = new PrintWriter(socket.getOutputStream(), true);
     this.socket = socket;
     this.managers = managers;
     this.receivers = receivers;
+    this.data_path = data_path;
 
     this.mpr.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY); // disable autodetect
-    this.mpr.enable(SerializationFeature.WRITE_NULL_MAP_VALUES);
+    this.mpr.setSerializationInclusion(Include.NON_NULL);
     this.mpr.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
     this.mpr.disable(JsonGenerator.Feature.AUTO_CLOSE_TARGET);
   }
@@ -187,25 +194,57 @@ public class SocketHandler implements Runnable {
     }
   }
 
-  private void send(JsonRequest request) throws IOException, EncapsulatedExceptions, GroupNotFoundException, GroupNotFoundException, AttachmentInvalidException, NotAGroupMemberException {
+  private void send(JsonRequest request) throws IOException, EncapsulatedExceptions, UntrustedIdentityException, UntrustedIdentityException, GroupNotFoundException, GroupNotFoundException, AttachmentInvalidException, NotAGroupMemberException {
     Manager manager = getManager(request.username);
+
     SignalServiceDataMessage.Quote quote = null;
+
     if(request.quote != null) {
       quote = request.quote.getQuote();
     }
+
+    if(request.attachmentFilenames != null) {
+      logger.warn("Using deprecated attachmentFilenames argument for send! Use attachments instead");
+      if(request.attachments == null) {
+        request.attachments = new ArrayList<JsonAttachment>();
+      }
+      for(String attachmentFilename: request.attachmentFilenames) {
+        request.attachments.add(new JsonAttachment(attachmentFilename));
+      }
+    }
+
+    List<SignalServiceAttachment> attachments = null;
+    if (request.attachments != null) {
+        attachments = new ArrayList<>(request.attachments.size());
+        for (JsonAttachment attachment : request.attachments) {
+            try {
+                File attachmentFile = new File(attachment.filename);
+                InputStream attachmentStream = new FileInputStream(attachmentFile);
+                final long attachmentSize = attachmentFile.length();
+                String mime = Files.probeContentType(attachmentFile.toPath());
+                if (mime == null) {
+                    mime = "application/octet-stream";
+                }
+
+                attachments.add(new SignalServiceAttachmentStream(attachmentStream, mime, attachmentSize, Optional.of(attachmentFile.getName()), attachment.voiceNote, attachment.getPreview(), attachment.width, attachment.height, Optional.fromNullable(attachment.caption), null));
+            } catch (IOException e) {
+                throw new AttachmentInvalidException(attachment.filename, e);
+            }
+        }
+    }
+
     if(request.recipientGroupId != null) {
       byte[] groupId = Base64.decode(request.recipientGroupId);
-      manager.sendGroupMessage(request.messageBody, request.attachmentFilenames, groupId, quote);
+      manager.sendGroupMessage(request.messageBody, attachments, groupId, quote);
     } else {
-      manager.sendMessage(request.messageBody, request.attachmentFilenames, request.recipientNumber, quote);
+      manager.sendMessage(request.messageBody, attachments, request.recipientNumber, quote);
     }
     this.reply("success", new JsonStatusMessage(0, "success"), request.id);
   }
 
   private void listAccounts(JsonRequest request) throws JsonProcessingException, IOException {
     // We have to create a manager for each account that we're listing, which is all of them :/
-    String settingsPath = System.getProperty("user.home") + "/.config/signal";
-    File[] users = new File(settingsPath + "/data").listFiles();
+    File[] users = new File(data_path + "/data").listFiles();
     for(int i = 0; i < users.length; i++) {
       if(!users[i].isDirectory()) {
         getManager(users[i].getName());
@@ -254,13 +293,12 @@ public class SocketHandler implements Runnable {
 
   private Manager getManager(String username) throws IOException {
     // So many problems in this method, need to have a single place to create new managers, probably in MessageReceiver
-    String settingsPath = System.getProperty("user.home") + "/.config/signal";  // TODO: Stop hard coding this everywhere
 
     if(this.managers.containsKey(username)) {
       return this.managers.get(username);
     } else {
       logger.info("Creating a manager for " + username);
-      Manager m = new Manager(username, settingsPath);
+      Manager m = new Manager(username, data_path);
       if(m.userExists()) {
         m.init();
       } else {
@@ -271,7 +309,7 @@ public class SocketHandler implements Runnable {
     }
   }
 
-  private void updateGroup(JsonRequest request) throws IOException, EncapsulatedExceptions, GroupNotFoundException, AttachmentInvalidException, NotAGroupMemberException {
+  private void updateGroup(JsonRequest request) throws IOException, EncapsulatedExceptions, UntrustedIdentityException, UntrustedIdentityException, GroupNotFoundException, AttachmentInvalidException, NotAGroupMemberException {
     Manager m = getManager(request.username);
 
     byte[] groupId = null;
@@ -306,7 +344,7 @@ public class SocketHandler implements Runnable {
     }
   }
 
-  private void setExpiration(JsonRequest request) throws IOException, GroupNotFoundException, NotAGroupMemberException, AttachmentInvalidException, EncapsulatedExceptions, IOException {
+  private void setExpiration(JsonRequest request) throws IOException, GroupNotFoundException, NotAGroupMemberException, AttachmentInvalidException, UntrustedIdentityException, EncapsulatedExceptions, IOException {
     Manager m = getManager(request.username);
 
     if(request.recipientGroupId != null) {
@@ -324,7 +362,7 @@ public class SocketHandler implements Runnable {
     this.reply("group_list", new JsonGroupList(m), request.id);
   }
 
-  private void leaveGroup(JsonRequest request) throws IOException, JsonProcessingException, GroupNotFoundException, EncapsulatedExceptions, NotAGroupMemberException {
+  private void leaveGroup(JsonRequest request) throws IOException, JsonProcessingException, GroupNotFoundException, UntrustedIdentityException, NotAGroupMemberException, EncapsulatedExceptions {
     Manager m = getManager(request.username);
     byte[] groupId = Base64.decode(request.recipientGroupId);
     m.sendQuitGroupMessage(groupId);
@@ -340,8 +378,7 @@ public class SocketHandler implements Runnable {
 
 
   private void link(JsonRequest request) throws AssertionError, IOException, InvalidKeyException {
-    String settingsPath = System.getProperty("user.home") + "/.config/signal";  // TODO: Stop hard coding this everywhere
-    Manager m = new Manager(null, settingsPath);
+    Manager m = new Manager(null, data_path);
     m.createNewIdentity();
     String deviceName = "signald"; // TODO: Set this to "signald on <hostname>"
     if(request.deviceName != null) {
@@ -431,7 +468,7 @@ public class SocketHandler implements Runnable {
 
   private void subscribe(JsonRequest request) throws IOException {
     if(!this.receivers.containsKey(request.username)) {
-      MessageReceiver receiver = new MessageReceiver(request.username, this.managers);
+      MessageReceiver receiver = new MessageReceiver(request.username, this.managers, this.data_path);
       this.receivers.put(request.username, receiver);
       Thread messageReceiverThread = new Thread(receiver);
       messageReceiverThread.start();

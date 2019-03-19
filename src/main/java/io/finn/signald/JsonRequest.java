@@ -39,6 +39,7 @@ class JsonRequest {
     public String code;
     public String deviceName;
     public List<String> attachmentFilenames;
+    public List<JsonAttachment> attachments;
     public String uri;
     public String groupName;
     public List<String> members;

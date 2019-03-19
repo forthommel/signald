@@ -29,6 +29,11 @@ for those that go for that sort of thing. MRs gladly accepted.
 This is currently beta software. The public API may have backwards-incompatible, breaking changes before it stabilizes, although we will make an
 effort to not do that. Further, there are no guarantees of safety or security with this software.
 
+Breaking changes that have been made:
+* As of [!86](https://git.callpipe.com/finn/signald/merge_requests/68), the data folder has moved from `~/.config/signal` to `~/.config/signald`.
+  You will need to migrate your data manually, unless you're using the debian package, which should handle this automatically.
+* As of [!66](https://git.callpipe.com/finn/signald/merge_requests/66), JSON keys that previously had values of `null` will simply not be sent.
+
 ## Interacting with signald
 
 ### Use a library
@@ -59,7 +64,7 @@ Sends a signal message to another user or a group. Possible values are:
 | `recipientNumber` | string | no | The number you are sending to. Required if not sending to a group |
 | `recipientGroupId` | string | no | The base64 encoded group ID to send to. Required if sending to a group |
 | `messageBody` | string | no | The text of the message. |
-| `attachmentFilenames` | list of strings | no | A list of files to attach, by path on the local disk. |
+| `attachments` | list of `attachment` | no | A list of attachments (see below) |
 | `quote` | quote | no | The message to quote |
 
 **Quote objects** can have these keys:
@@ -80,6 +85,17 @@ Sends a signal message to another user or a group. Possible values are:
 |-------|--------|-----------|-------------|
 | `contentType` | string | yes | The content type of the quoted attachment |
 | `fileName` | string | no | The original filename of the quoted attachment |
+
+**attachment** objects can have these keys:
+
+| Field       | Type     | Required? | Description |
+|-------------|----------|-----------|-------------|
+| `filename`  | `string` | yes       | The filename of the attachment |
+| `caption`   | `string` | no        | An optional caption |
+| `width`     | `int`    | no        | The width of the image |
+| `height`    | `int`    | no        | The height of the image |
+| `voiceNote` | `bool`   | no        | True if this attachment is a voice note |
+| `preview`   | `string` | no        | The preview data to send, base64 encoded |
 
 
 ### `register`
@@ -194,7 +210,7 @@ will not listen for messages from the Signal server and the server will store th
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `username` | `string` | yes | The user to unsubscribe to messages for. |
+| `username` | `string` | yes | The user to subscribe to messages for. |
 
 ### `unsubscribe`
 
@@ -234,11 +250,12 @@ Create or update a contact in our contact store.
 
 
 **contact** objects can have these keys:
+
 | Field | Type   | Required? | Description |
 |-------|--------|-----------|-------------|
 | `number` | `string` | yes | The phone number of the contact. If no contact exists with this number, a new one will be created. |
-| `name` | `string | no | The name for this contact. |
-| `color` | string | no | The color for conversations with this contact. |
+| `name` | `string` | no | The name for this contact. |
+| `color` | `string` | no | The color for conversations with this contact. |
 
 ### `set_expiration`
 
@@ -272,6 +289,17 @@ Now you can install signald:
 ```
 sudo apt install signald
 ```
+
+
+## Transition An Account From signal-cli
+
+signald's on-disk data structures are generally the same as or very similar to signal-cli's. Until recently, signald used the same
+location to store the accounts on the disk. To transition all of your accounts from signal-cli to signald, simply rename `~/.config/signal`
+to `~/.config/signald`. Please note that you should **not** copy and use the same account with both programs. Link them to the same user
+if you would like to use both signald and signal-cli.
+
+If you have installed the `.deb` and are using the system-wide signald service, copy to `/var/lib/signald`
+
 ## License
 This software is licensed under the GPLv3. It is based on [signal-cli](https://github.com/Asamk/signal-cli)
 
