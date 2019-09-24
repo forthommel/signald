@@ -1,5 +1,3 @@
-image: openjdk:8-jdk
-
 stages:
   - check for updates
   - build
@@ -15,12 +13,36 @@ cache:
     - .gradle/wrapper
     - .gradle/caches
 
-build:
+build-java-8:
+  image: openjdk:8-jdk
   stage: build
   before_script:
     - apt update && apt install -y make
+  except:
+    - schedules
   script:
     - make installDist
+
+build-java-9:
+  image: openjdk:9-jdk
+  stage: build
+  before_script:
+    - apt update && apt install -y make
+  except:
+    - schedules
+  script:
+    - make installDist
+
+build-java-11:
+  image: openjdk:11-jdk
+  stage: build
+  before_script:
+    - apt update && apt install -y make
+  except:
+    - schedules
+  script:
+    - make installDist
+
 
 deb:build:
   stage: build
@@ -33,8 +55,9 @@ deb:build:
     - cat debian/changelog
     - dpkg-buildpackage -b
     - cp -rv ../signald_${VERSION}* .
+  except:
+    - schedules
   artifacts:
-    expire_in: 1 year
     paths:
       - "signald_*"
 
@@ -48,15 +71,16 @@ deb:publish:
     - export SUITE=$(get-suite)
     - export VERSION=$(./version.sh)
     - mkdir -p public/dists/${SUITE}/
-    - mc cp -r -q "minio/${S3_BUCKET}/updates.signald.org/dists/${SUITE}/" public/ || true
+    - mc cp -r -q "minio/${S3_BUCKET}/dists/${SUITE}/" public/ || true
   script:
     - gpg --detach-sign signald_${VERSION}*.deb
     - cd public
     - release-deb ../ "${SIGNING_KEY}"
     - gpg --export --armor "${SIGNING_KEY}" > apt-signing-key.asc
-    - for f in apt-signing-key.asc dists/${SUITE}/main/binary-amd64/signald_${VERSION}* $(find dists/ -type f | grep -v -E "\.deb$"); do mc cp -q "$f" "minio/${S3_BUCKET}/updates.signald.org/$f"; done
+    - for f in apt-signing-key.asc dists/${SUITE}/main/binary-amd64/signald_${VERSION}* $(find dists/ -type f | grep -v -E "\.deb$"); do mc cp -q "$f" "minio/${S3_BUCKET}/$f"; done
+  except:
+    - schedules
   artifacts:
-    expire_in: 1 year
     paths:
       - "signald_*.sig"
   dependencies:
@@ -70,10 +94,13 @@ deb:cleanup:
   before_script:
     - mc config host add minio "${S3_URL}" "${AWS_ACCESS_KEY_ID}" "${AWS_SECRET_ACCESS_KEY}"
   script:
-    - repo-cron "minio/${S3_BUCKET}/updates.signald.org"
+    - repo-cron "minio/${S3_BUCKET}"
+  variables:
+    STORAGE_TIME: "31557600"  # Store 1 year of historical builds
 
 checkupdates:gradle:
   stage: check for updates
+  image: openjdk:11-jdk
   only:
     - schedules
     - feature/autoupdates
