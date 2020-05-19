@@ -1,6 +1,7 @@
 stages:
   - check for updates
   - build
+  - test
   - publish
   - cleanup
 
@@ -42,11 +43,14 @@ build-java-11:
     - schedules
   script:
     - make installDist
-
+  artifacts:
+    paths:
+      - build/
 
 deb:build:
   stage: build
   image: registry.git.callpipe.com/finn/debian-repo-builder:latest
+  retry: 2
   before_script:
     - export VERSION=$(./version.sh)
     - echo "Building signald version $VERSION"
@@ -57,9 +61,33 @@ deb:build:
     - cp -rv ../signald_${VERSION}* .
   except:
     - schedules
+  cache:
+    key: deb-builder
   artifacts:
     paths:
       - "signald_*"
+
+build-docker:
+  image: docker:latest
+  stage: build
+  tags:
+    - docker-builder
+  only:
+    - branches
+    - tags
+  before_script:
+    - docker login -u ${CI_REGISTRY_USER} -p ${CI_REGISTRY_PASSWORD} ${CI_REGISTRY}
+    - if [[ ! -z "${DOCKER_HUB_USERNAME}" ]]; then docker login -u ${DOCKER_HUB_USERNAME} -p ${DOCKER_HUB_PASSWORD}; fi
+  script:
+    - docker build -t ${CI_REGISTRY_IMAGE}:${CI_COMMIT_REF_SLUG} .
+    - docker push ${CI_REGISTRY_IMAGE}:${CI_COMMIT_REF_SLUG}
+    - if [[ "${CI_COMMIT_REF_SLUG}" == "master" ]]; then docker tag ${CI_REGISTRY_IMAGE}:${CI_COMMIT_REF_SLUG} ${CI_REGISTRY_IMAGE}:latest; fi;
+    - if [[ "${CI_COMMIT_REF_SLUG}" == "master" ]]; then docker push ${CI_REGISTRY_IMAGE}:latest; fi;
+    - if [[ ! -z "${DOCKER_HUB_USERNAME}" ]]; then docker tag ${CI_REGISTRY_IMAGE}:${CI_COMMIT_REF_SLUG} ${DOCKER_HUB_USERNAME}/signald:${CI_COMMIT_REF_SLUG}; fi
+    - if [[ ! -z "${DOCKER_HUB_USERNAME}" ]]; then docker push ${DOCKER_HUB_USERNAME}/signald:${CI_COMMIT_REF_SLUG}; fi
+    - if [[ ! -z "${DOCKER_HUB_USERNAME}" ]] && [[ "${CI_COMMIT_REF_SLUG}" == "master" ]]; then docker tag ${CI_REGISTRY_IMAGE}:${CI_COMMIT_REF_SLUG} ${DOCKER_HUB_USERNAME}/signald:latest; fi
+    - if [[ ! -z "${DOCKER_HUB_USERNAME}" ]] && [[ "${CI_COMMIT_REF_SLUG}" == "master" ]]; then docker push ${DOCKER_HUB_USERNAME}/signald:latest; fi
+
 
 deb:publish:
   stage: publish
@@ -85,6 +113,21 @@ deb:publish:
       - "signald_*.sig"
   dependencies:
     - deb:build
+
+test:integration:
+  image: openjdk:11-jdk
+  stage: test
+  before_script:
+    - cp tools/log4j2.xml src/main/resources/log4j2.xml
+  script:
+    - ./gradlew integrationTest --info
+  variables:
+    SIGNAL_URL: $SIGNAL_TEST_SERVER
+  artifacts:
+    reports:
+      junit: build/test-results/integrationTest/TEST-*.xml
+  dependencies:
+    - build-java-11
 
 deb:cleanup:
   stage: cleanup

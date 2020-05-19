@@ -107,6 +107,7 @@ Begins the process of registering a new number on signal for use with signald. P
 | Field | Type | Required? | Description |
 |-------|------|-----------|-------------|
 | `username` | string | yes | The phone number to register |
+| `captcha` | string | no | The captcha value to use, if you get `CaptchaRequiredException` when trying to register. See the [Captchas](https://gitlab.com/thefinn93/signald/-/wikis/Captchas) wiki page for info. |
 | `voice` | boolean | no | Indicates if the verification code should be sent via a phone call. If `false` or not set the verification is done via SMS |
 
 
@@ -118,6 +119,18 @@ Completes the registration process, by providing a verification code sent after 
 |-------|------|-----------|-------------|
 | `username` | string | yes | The phone number that is being verified |
 | `code` | string | yes | The verification code. The `-` in the middle code is optional.
+
+
+### `mark_read`
+
+Mark a received message as "read" by sending a receipt message.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `username` | `string` | yes | The local account to use to send the read receipt. |
+| `recipientNumber` | `string` | yes | The full number that sent the original message. |
+| `timestamps` | `list of numbers` | yes | The timestamps of the messages to mark as read. |
+| `when` | `number` | no | The timestamp of when the message was read. If omitted, defaults to the current time. |
 
 
 ### `add_device`
@@ -199,7 +212,14 @@ Trust's a safety number or fingerprint.
 |-------|------|----------|-------------|
 | `username` | `string` | yes | The local account to use to check the identity |
 | `recipientNumber` | `string` | yes | The full number to look up. |
-| `fingerprint` | `string` | yes | the safety number or fingerprint to trust. |
+| `fingerprint` | `string` | yes | The safety number or fingerprint to trust. |
+| `trustLevel` | `string` | no | The level at which to trust the identity. |
+
+If `trustLevel` is not specified, defaults to `TRUSTED_VERIFIED`. Possible values are:
+
+- `TRUSTED_VERIFIED`
+- `TRUSTED_UNVERIFIED`
+- `UNTRUSTED`
 
 ### `version`
 
@@ -271,6 +291,26 @@ As one might expect, `recipientNumber` and `recipientGroupId` are mutually exclu
 | `recipientNumber` | `string` | no | The PM to change expiration for. |
 | `recipientGroupId` | `string` | no | The group ID to update expiration for. |
 | `expiresInSeconds` | `int` | yes | The number of seconds after which messages in the conversation should expire. Set to 0 to turn of disappearing messages. |
+
+
+### `get_profile`
+
+Gets a user's profile. At this time only the name is available. Must have the user's profileKey already, otherwise you'll get a `profile_not_available`.
+
+| Field             | Type     | Required | Description |
+|-------------------|----------|----------|-------------|
+| `username`        | `string` | yes      | The account to use. |
+| `recipientNumber` | `string` | yes      | The number of the user who's profile is being checked. |
+
+
+### `set_profile`
+
+Sets the user's profile. At thie time only the name is available.
+
+| Field      | Type     | Required | Description |
+|------------|----------|----------|-------------|
+| `username` | `string` | yes      | The account to use. |
+| `name`     | `string` | yes      | The number of the user who's profile is being checked. |
 
 ## Transition An Account From signal-cli
 

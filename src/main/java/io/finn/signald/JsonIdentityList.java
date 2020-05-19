@@ -1,5 +1,5 @@
-/**
- * Copyright (C) 2018 Finn Herzfeld
+/*
+ * Copyright (C) 2020 Finn Herzfeld
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -40,8 +40,11 @@ class JsonIdentityList {
         }
       }
     } else {
-      for(JsonIdentityKeyStore.Identity identity : m.getIdentities(number)) {
-        this.identities.add(new JsonIdentity(identity, m, number));
+      List<JsonIdentityKeyStore.Identity> identities = m.getIdentities(number);
+      if(identities != null) {
+        for(JsonIdentityKeyStore.Identity identity : m.getIdentities(number)) {
+          this.identities.add(new JsonIdentity(identity, m, number));
+        }
       }
     }
   }

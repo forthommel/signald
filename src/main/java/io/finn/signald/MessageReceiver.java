@@ -1,5 +1,5 @@
-/**
- * Copyright (C) 2018 Finn Herzfeld
+/*
+ * Copyright (C) 2020 Finn Herzfeld
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -36,16 +36,11 @@ import org.apache.logging.log4j.Logger;
 
 class MessageReceiver implements Manager.ReceiveMessageHandler, Runnable {
     final String username;
-    private Manager m;
-    private ConcurrentHashMap<String,Manager> managers;
     private SocketManager sockets;
     private static final Logger logger = LogManager.getLogger();
-    private String data_path;
 
-    public MessageReceiver(String username, ConcurrentHashMap<String,Manager> managers, String data_path) {
-      this.managers = managers;
+    public MessageReceiver(String username) {
       this.username = username;
-      this.data_path = data_path;
       this.sockets = new SocketManager();
     }
 
@@ -54,36 +49,24 @@ class MessageReceiver implements Manager.ReceiveMessageHandler, Runnable {
     }
 
     public boolean unsubscribe(Socket s) {
-      boolean removed = this.sockets.remove(s);
-      if(removed && this.sockets.size() == 0) {
+      boolean removed = sockets.remove(s);
+      if(removed && sockets.size() == 0) {
           logger.info("Last client for " + this.username + " unsubscribed, shutting down message pipe!");
-          this.m.shutdownMessagePipe();
+          try {
+              Manager.get(username).shutdownMessagePipe();
+          } catch(IOException | NoSuchAccountException e) {
+              logger.catching(e);
+          }
       }
       return removed;
-    }
-
-    private Manager getManager(String username, String data_path) throws IOException {
-      if(this.managers.containsKey(username)) {
-        return this.managers.get(username);
-      } else {
-        logger.info("Creating a manager for " + username);
-        Manager m = new Manager(username, data_path);
-        if(m.userExists()) {
-          m.init();
-        } else {
-          logger.warn("Created manager for a user that doesn't exist! (" + username + ")");
-        }
-        this.managers.put(username, m);
-        return m;
-      }
     }
 
 
     public void run() {
       try {
-        Thread.currentThread().setName(this.username + "-manager");
-        this.m = getManager(this.username, this.data_path);
-        while(true) {
+        Thread.currentThread().setName(username + "-receiver");
+        Manager manager = Manager.get(username);
+        while(sockets.size() > 0) {
           double timeout = 3600;
           boolean returnOnTimeout = true;
           if (timeout < 0) {
@@ -92,15 +75,13 @@ class MessageReceiver implements Manager.ReceiveMessageHandler, Runnable {
           }
           boolean ignoreAttachments = false;
           try {
-            this.m.receiveMessages((long) (timeout * 1000), TimeUnit.MILLISECONDS, returnOnTimeout, ignoreAttachments, this);
+            manager.receiveMessages((long) (timeout * 1000), TimeUnit.MILLISECONDS, returnOnTimeout, ignoreAttachments, this);
           } catch (IOException e) {
-              continue;
+              logger.debug("probably harmless IOException while receiving messages:" + e.toString());
           } catch (AssertionError e) {
               logger.catching(e);
           }
         }
-      } catch (org.whispersystems.signalservice.api.push.exceptions.AuthorizationFailedException e) {
-        logger.warn("Authorization Failed for " + username);
       } catch(Exception e) {
         logger.catching(e);
       }
@@ -108,14 +89,20 @@ class MessageReceiver implements Manager.ReceiveMessageHandler, Runnable {
 
     @Override
     public void handleMessage(SignalServiceEnvelope envelope, SignalServiceContent content, Throwable exception) {
+      String type = "message";
+      if(exception != null) {
+        logger.catching(exception);
+        type = "unreadable_message";
+      }
+
       try {
-        SignalServiceAddress source = envelope.getSourceAddress();
-        ContactInfo sourceContact = this.m.getContact(source.getNumber());
         if(envelope != null) {
-          JsonMessageEnvelope message = new JsonMessageEnvelope(envelope, content, this.m);
-          this.sockets.broadcast(new JsonMessageWrapper("message", message));
+          JsonMessageEnvelope message = new JsonMessageEnvelope(envelope, content, username);
+          this.sockets.broadcast(new JsonMessageWrapper(type, message, exception));
+        } else {
+            this.sockets.broadcast(new JsonMessageWrapper(type, null, exception));
         }
-      } catch (IOException e) {
+      } catch (IOException | NoSuchAccountException e) {
         logger.catching(e);
       }
     }

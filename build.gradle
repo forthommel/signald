@@ -4,6 +4,7 @@ plugins {
 
 apply plugin: 'java'
 apply plugin: 'application'
+apply plugin: 'idea'
 
 mainClassName = 'io.finn.signald.Main'
 
@@ -16,16 +17,34 @@ repositories {
     mavenCentral()
 }
 
+sourceSets {
+    integrationTest {
+        java {
+            compileClasspath += main.output + test.output
+            runtimeClasspath += main.output + test.output
+            srcDir file('src/integration-tests/java')
+        }
+        resources.srcDir file('src/integration-tests/resources')
+    }
+}
+
+configurations {
+    integrationTestCompile.extendsFrom testCompile
+    integrationTestRuntime.extendsFrom testRuntime
+}
+
 dependencies {
-    compile 'com.github.turasa:signal-service-java:2.13.0_unofficial_2'
-    compile 'org.bouncycastle:bcprov-jdk15on:1.63'
-    compile 'com.kohlschutter.junixsocket:junixsocket-common:2.2.0'
-    compile 'com.kohlschutter.junixsocket:junixsocket-native-common:2.2.0'
-    compile 'org.apache.logging.log4j:log4j-api:2.12.0'
-    compile 'org.apache.logging.log4j:log4j-core:2.12.1'
-    compile 'io.sentry:sentry-log4j2:1.7.23'
+    compile 'com.github.turasa:signal-service-java:2.13.9_unofficial_1'
+    compile 'org.bouncycastle:bcprov-jdk15on:1.64'
+    compile 'com.kohlschutter.junixsocket:junixsocket-common:2.3.1'
+    compile 'com.kohlschutter.junixsocket:junixsocket-native-common:2.3.1'
+    compile 'org.apache.logging.log4j:log4j-api:2.13.0'
+    compile 'org.apache.logging.log4j:log4j-core:2.13.0'
+    compile 'io.sentry:sentry-log4j2:1.7.30'
     compile 'org.slf4j:slf4j-nop:1.8.0-beta4'
-    compile 'info.picocli:picocli:3.9.5'
+    compile 'info.picocli:picocli:4.2.0'
+    testCompile 'org.junit.jupiter:junit-jupiter-api:5.3.1'
+    testRuntime 'org.junit.jupiter:junit-jupiter-engine:5.3.1'
 }
 
 
@@ -41,6 +60,7 @@ buildConfig {
   buildConfigField 'String', 'SIGNAL_CDN_URL', { System.getenv("SIGNAL_CDN_URL") ?: "https://cdn.signal.org" }
   buildConfigField 'String', 'SIGNAL_CONTACT_DISCOVERY_URL', { System.getenv("SIGNAL_CONTACT_DISCOVERY_URL") ?: "https://cms.souqcdn.com" }
   buildConfigField 'String', 'USER_AGENT', { System.getenv("USER_AGENT") ?: "signald-" + version }
+  buildConfigField "String", "UNIDENTIFIED_SENDER_TRUST_ROOT", "BXu6QIKVz5MA8gstzfOgRQGqyLqOwNKHL6INkv3IHWMF"
 }
 
 
@@ -68,7 +88,7 @@ task checkLibVersions {
                         def group = dependency.group
                         def path = group.replace('.', '/')
                         def name = dependency.name
-                        def url = "http://repo1.maven.org/maven2/$path/$name/maven-metadata.xml"
+                        def url = "https://repo1.maven.org/maven2/$path/$name/maven-metadata.xml"
                         try {
                             def metadata = new XmlSlurper().parseText(url.toURL().text)
                             // def versions = metadata.versioning.versions.version.collect { it.text() }
@@ -91,4 +111,12 @@ task checkLibVersions {
             }
         }
     }
+}
+
+
+task integrationTest(type: Test) {
+    useJUnitPlatform()
+    testClassesDirs = sourceSets.integrationTest.output.classesDirs
+    classpath = sourceSets.integrationTest.runtimeClasspath
+    outputs.upToDateWhen { false }
 }

@@ -1,5 +1,5 @@
-/**
- * Copyright (C) 2018 Finn Herzfeld
+/*
+ * Copyright (C) 2020 Finn Herzfeld
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,6 +25,7 @@ class JsonMessageWrapper {
   String id;
   String type;
   Object data;
+  String exception;
 
   public JsonMessageWrapper(String type, Object data, String id) {
     this.type = type;
@@ -32,7 +33,11 @@ class JsonMessageWrapper {
     this.id = id;
   }
 
-  public JsonMessageWrapper(String type, Object data) {
-    this(type, data, null);
+  public JsonMessageWrapper(String type, Object data, Throwable e) {
+    this.type = type;
+    this.data = data;
+    if(e != null) {
+      this.exception = e.toString();
+    }
   }
 }

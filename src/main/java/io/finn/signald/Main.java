@@ -1,5 +1,5 @@
-/**
- * Copyright (C) 2018 Finn Herzfeld
+/*
+ * Copyright (C) 2020 Finn Herzfeld
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,6 +22,7 @@ import io.finn.signald.BuildConfig;
 import java.io.File;
 import java.io.IOException;
 import java.net.Socket;
+import java.nio.file.Files;
 import java.security.Security;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -42,7 +43,8 @@ import io.sentry.Sentry;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
-import picocli.CommandLine.Parameters;
+
+import org.whispersystems.libsignal.logging.SignalProtocolLoggerProvider;
 
 
 @Command(name=BuildConfig.NAME, mixinStandardHelpOptions=true, version=BuildConfig.NAME + " " + BuildConfig.VERSION)
@@ -82,14 +84,21 @@ public class Main implements Runnable {
       Security.addProvider(new BouncyCastleProvider());
 
       SocketManager socketmanager = new SocketManager();
-      ConcurrentHashMap<String,Manager> managers = new ConcurrentHashMap<String,Manager>();
       ConcurrentHashMap<String,MessageReceiver> receivers = new ConcurrentHashMap<String,MessageReceiver>();
 
-      logger.info("Binding to socket " + socket_path);
-
       // Spins up one thread per inbound connection to the control socket
+      File socketFile = new File(socket_path);
+      if(socketFile.exists()) {
+        logger.debug("Deleting existing socket file");
+        Files.delete(socketFile.toPath());
+      }
+      logger.info("Binding to socket " + socket_path);
       AFUNIXServerSocket server = AFUNIXServerSocket.newInstance();
-      server.bind(new AFUNIXSocketAddress(new File(socket_path)));
+      server.bind(new AFUNIXSocketAddress(socketFile));
+
+      logger.debug("Using data folder " + data_path);
+
+      Manager.setDataPath(data_path);
 
       // Spins up one thread per registered signal number, listens for incoming messages
       File[] users = new File(data_path + "/data").listFiles();
@@ -98,7 +107,7 @@ public class Main implements Runnable {
          logger.warn("No users are currently defined, you'll need to register or link to your existing signal account");
       }
 
-      logger.debug("Using data folder " + data_path);
+      SignalProtocolLoggerProvider.setProvider(new ProtocolLogger());
 
       logger.info("Started " + BuildConfig.NAME + " " + BuildConfig.VERSION);
 
@@ -108,7 +117,7 @@ public class Main implements Runnable {
           socketmanager.add(socket);
 
           // Kick off the thread to read input
-          Thread socketHandlerThread = new Thread(new SocketHandler(socket, receivers, managers, data_path), "socketlistener");
+          Thread socketHandlerThread = new Thread(new SocketHandler(socket, receivers), "socketlistener");
           socketHandlerThread.start();
 
         } catch(IOException e) {

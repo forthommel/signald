@@ -1,5 +1,5 @@
-/**
- * Copyright (C) 2018 Finn Herzfeld
+/*
+ * Copyright (C) 2020 Finn Herzfeld
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -47,7 +47,12 @@ class JsonRequest {
     public JsonQuote quote;
     public int expiresInSeconds;
     public String fingerprint;
+    public String trustLevel;
     public ContactInfo contact;
+    public String captcha;
+    public String name;
+    public List<Long> timestamps;
+    public long when;
 
     JsonRequest() {}
     @JsonCreator

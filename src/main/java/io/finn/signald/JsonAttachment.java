@@ -1,5 +1,5 @@
-/**
- * Copyright (C) 2018 Finn Herzfeld
+/*
+ * Copyright (C) 2020 Finn Herzfeld
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,6 +18,7 @@
 package io.finn.signald;
 
 import java.io.File;
+import java.io.IOException;
 
 import org.whispersystems.signalservice.api.messages.SignalServiceAttachment;
 import org.whispersystems.signalservice.api.messages.SignalServiceAttachmentPointer;
@@ -38,6 +39,7 @@ class JsonAttachment {
     String preview;
     String key;
     String digest;
+    String blurhash;
 
     JsonAttachment() {}
 
@@ -45,7 +47,7 @@ class JsonAttachment {
         this.filename = storedFilename;
     }
 
-    JsonAttachment(SignalServiceAttachment attachment, Manager m) {
+    JsonAttachment(SignalServiceAttachment attachment, String username) throws IOException, NoSuchAccountException {
         this.contentType = attachment.getContentType();
         final SignalServiceAttachmentPointer pointer = attachment.asPointer();
         if (attachment.isPointer()) {
@@ -73,13 +75,14 @@ class JsonAttachment {
                 this.caption = pointer.getCaption().get();
             }
 
-            if( m != null) {
-                File file = m.getAttachmentFile(pointer.getId());
-                if( file.exists()) {
-                    this.storedFilename = file.toString();
-                }
+            if(pointer.getBlurHash().isPresent()) {
+                this.blurhash = pointer.getBlurHash().get();
             }
 
+            File file = Manager.get(username).getAttachmentFile(pointer.getId());
+            if(file.exists()) {
+                this.storedFilename = file.toString();
+            }
         }
     }
 
@@ -87,6 +90,6 @@ class JsonAttachment {
       if(preview != null) {
           return Optional.of(Base64.encodeBytesToBytes(preview.getBytes()));
       }
-      return Optional.<byte[]>absent();
+      return Optional.absent();
     }
 }
