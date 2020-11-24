@@ -17,44 +17,51 @@
 
 package io.finn.signald;
 
+import io.finn.signald.clientprotocol.v1.JsonAddress;
+import io.finn.signald.storage.GroupInfo;
 import org.whispersystems.signalservice.api.messages.SignalServiceGroup;
-import org.whispersystems.signalservice.internal.util.Base64;
-
-import org.asamk.signal.storage.groups.GroupInfo;
+import org.whispersystems.signalservice.api.push.SignalServiceAddress;
+import org.whispersystems.util.Base64;
 
 import java.io.IOException;
-import java.util.List;
 import java.util.ArrayList;
+import java.util.List;
 
 class JsonGroupInfo {
-    String groupId;
-    List<String> members;
-    String name;
-    String type;
-    Long avatarId;
+  String groupId;
+  List<JsonAddress> members;
+  String name;
+  String type;
+  Long avatarId;
 
-    JsonGroupInfo(SignalServiceGroup groupInfo, String username) throws IOException, NoSuchAccountException {
-        Manager manager = Manager.get(username);
-        this.groupId = Base64.encodeBytes(groupInfo.getGroupId());
-        if (groupInfo.getMembers().isPresent()) {
-            this.members = groupInfo.getMembers().get();
-        }
-        if (groupInfo.getName().isPresent()) {
-            this.name = groupInfo.getName().get();
-        } else {
-            GroupInfo group = manager.getGroup(groupInfo.getGroupId());
-            if(group != null) {
-                this.name = group.name;
-            }
-        }
-
-        this.type = groupInfo.getType().toString();
+  JsonGroupInfo(SignalServiceGroup groupInfo, String username) throws IOException, NoSuchAccountException {
+    Manager manager = Manager.get(username);
+    this.groupId = Base64.encodeBytes(groupInfo.getGroupId());
+    if (groupInfo.getMembers().isPresent()) {
+      this.members = new ArrayList<>();
+      for (SignalServiceAddress member : groupInfo.getMembers().get()) {
+        this.members.add(new JsonAddress(member));
+      }
+    }
+    if (groupInfo.getName().isPresent()) {
+      this.name = groupInfo.getName().get();
+    } else {
+      GroupInfo group = manager.getGroup(groupInfo.getGroupId());
+      if (group != null) {
+        this.name = group.name;
+      }
     }
 
-    JsonGroupInfo(GroupInfo groupInfo, Manager m) {
-        this.groupId = Base64.encodeBytes(groupInfo.groupId);
-	this.name = groupInfo.name;
-	this.members =  new ArrayList<String>(groupInfo.members);
-	this.avatarId = groupInfo.getAvatarId();
+    this.type = groupInfo.getType().toString();
+  }
+
+  JsonGroupInfo(GroupInfo groupInfo, Manager m) {
+    this.groupId = Base64.encodeBytes(groupInfo.groupId);
+    this.name = groupInfo.name;
+    this.members = new ArrayList<>();
+    for (SignalServiceAddress member : groupInfo.getMembers()) {
+      this.members.add(new JsonAddress(member));
     }
+    this.avatarId = groupInfo.getAvatarId();
+  }
 }

@@ -17,19 +17,20 @@
 
 package io.finn.signald;
 
+import io.finn.signald.clientprotocol.v1.JsonAddress;
 import org.whispersystems.signalservice.api.messages.multidevice.VerifiedMessage;
 import org.asamk.signal.util.Hex;
 
 class JsonVerifiedMessage {
-    String destination;
-    String identityKey;
-    String verified;
-    long timestamp;
+  JsonAddress destination;
+  String identityKey;
+  String verified;
+  long timestamp;
 
-    JsonVerifiedMessage(VerifiedMessage message) {
-        destination = message.getDestination();
-        identityKey = Hex.toStringCondensed(message.getIdentityKey().getPublicKey().serialize());
-        verified = message.getVerified().toString();
-        timestamp = message.getTimestamp();
-    }
+  JsonVerifiedMessage(VerifiedMessage message) {
+    destination = new JsonAddress(message.getDestination());
+    identityKey = Hex.toStringCondensed(message.getIdentityKey().getPublicKey().serialize());
+    verified = message.getVerified().toString();
+    timestamp = message.getTimestamp();
+  }
 }

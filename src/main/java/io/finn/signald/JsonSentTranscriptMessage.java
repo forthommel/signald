@@ -17,32 +17,37 @@
 
 package io.finn.signald;
 
+import io.finn.signald.clientprotocol.v1.JsonAddress;
 import org.whispersystems.signalservice.api.messages.multidevice.SentTranscriptMessage;
+import org.whispersystems.signalservice.api.push.SignalServiceAddress;
 
 import java.io.IOException;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
 class JsonSentTranscriptMessage {
-    String destination;
-    long timestamp;
-    long expirationStartTimestamp;
-    JsonDataMessage message;
-    Map<String, Boolean> unidentifiedStatus = new HashMap<>();
-    boolean isRecipientUpdate;
+  JsonAddress destination;
+  long timestamp;
+  long expirationStartTimestamp;
+  JsonDataMessage message;
+  Map<String, Boolean> unidentifiedStatus = new HashMap<>();
+  boolean isRecipientUpdate;
 
-    JsonSentTranscriptMessage(SentTranscriptMessage s, String username) throws IOException, NoSuchAccountException {
-        if(s.getDestination().isPresent()) {
-            destination = s.getDestination().get();
-        }
-
-        timestamp = s.getTimestamp();
-        expirationStartTimestamp = s.getExpirationStartTimestamp();
-        message = new JsonDataMessage(s.getMessage(), username);
-        for(String r : s.getRecipients()) {
-            unidentifiedStatus.put(r, s.isUnidentified(r));
-        }
-        isRecipientUpdate = s.isRecipientUpdate(); 
+  JsonSentTranscriptMessage(SentTranscriptMessage s, String username) throws IOException, NoSuchAccountException {
+    if (s.getDestination().isPresent()) {
+      destination = new JsonAddress(s.getDestination().get());
     }
+    timestamp = s.getTimestamp();
+    expirationStartTimestamp = s.getExpirationStartTimestamp();
+    message = new JsonDataMessage(s.getMessage(), username);
+    for (SignalServiceAddress r : s.getRecipients()) {
+      if (r.getNumber().isPresent()) {
+        unidentifiedStatus.put(r.getNumber().get(), s.isUnidentified(r.getNumber().get()));
+      }
+      if (r.getUuid().isPresent()) {
+        unidentifiedStatus.put(r.getUuid().get().toString(), s.isUnidentified(r.getUuid().get()));
+      }
+    }
+    isRecipientUpdate = s.isRecipientUpdate();
+  }
 }

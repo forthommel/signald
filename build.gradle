@@ -29,22 +29,21 @@ sourceSets {
 }
 
 configurations {
-    integrationTestCompile.extendsFrom testCompile
-    integrationTestRuntime.extendsFrom testRuntime
+    integrationTestCompile.extendsFrom testImplementation
+    integrationTestRuntime.extendsFrom testRuntimeOnly
 }
 
 dependencies {
-    compile 'com.github.turasa:signal-service-java:2.13.9_unofficial_1'
-    compile 'org.bouncycastle:bcprov-jdk15on:1.64'
-    compile 'com.kohlschutter.junixsocket:junixsocket-common:2.3.1'
-    compile 'com.kohlschutter.junixsocket:junixsocket-native-common:2.3.1'
-    compile 'org.apache.logging.log4j:log4j-api:2.13.0'
-    compile 'org.apache.logging.log4j:log4j-core:2.13.0'
-    compile 'io.sentry:sentry-log4j2:1.7.30'
-    compile 'org.slf4j:slf4j-nop:1.8.0-beta4'
-    compile 'info.picocli:picocli:4.2.0'
-    testCompile 'org.junit.jupiter:junit-jupiter-api:5.3.1'
-    testRuntime 'org.junit.jupiter:junit-jupiter-engine:5.3.1'
+    implementation 'com.github.turasa:signal-service-java:2.15.3_unofficial_14'
+    implementation 'org.bouncycastle:bcprov-jdk15on:1.66'
+    implementation 'com.kohlschutter.junixsocket:junixsocket-common:2.3.2'
+    implementation 'com.kohlschutter.junixsocket:junixsocket-native-common:2.3.2'
+    implementation 'org.apache.logging.log4j:log4j-api:2.13.3'
+    implementation 'org.apache.logging.log4j:log4j-core:2.13.3'
+    implementation 'org.slf4j:slf4j-nop:1.8.0-beta4'
+    implementation 'info.picocli:picocli:4.5.0'
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.3.1'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.3.1'
 }
 
 
@@ -58,9 +57,15 @@ buildConfig {
 
   buildConfigField 'String', 'SIGNAL_URL', { System.getenv("SIGNAL_URL") ?: "https://textsecure-service.whispersystems.org" }
   buildConfigField 'String', 'SIGNAL_CDN_URL', { System.getenv("SIGNAL_CDN_URL") ?: "https://cdn.signal.org" }
+  buildConfigField 'String', 'SIGNAL_CDN2_URL', { System.getenv("SIGNAL_CDN_URL") ?: "https://cdn2.signal.org" }
+  buildConfigField 'String', 'SIGNAL_KEY_BACKUP_URL', { System.getenv("SIGNAL_KEY_BACKUP_URL") ?: "https://api.backup.signal.org" }
+  buildConfigField 'String', 'SIGNAL_STORAGE_URL', { System.getenv("SIGNAL_STORAGE_URL") ?: "https://storage.signal.org" }
   buildConfigField 'String', 'SIGNAL_CONTACT_DISCOVERY_URL', { System.getenv("SIGNAL_CONTACT_DISCOVERY_URL") ?: "https://cms.souqcdn.com" }
   buildConfigField 'String', 'USER_AGENT', { System.getenv("USER_AGENT") ?: "signald-" + version }
-  buildConfigField "String", "UNIDENTIFIED_SENDER_TRUST_ROOT", "BXu6QIKVz5MA8gstzfOgRQGqyLqOwNKHL6INkv3IHWMF"
+  buildConfigField 'String', 'SIGNAL_AGENT', { System.getenv("SIGNAL_AGENT") ?: "signald" }
+  buildConfigField 'String', "UNIDENTIFIED_SENDER_TRUST_ROOT", "BXu6QIKVz5MA8gstzfOgRQGqyLqOwNKHL6INkv3IHWMF"
+  buildConfigField 'String', "SIGNAL_ZK_GROUP_SERVER_PUBLIC_PARAMS_HEX", "AMhf5ywVwITZMsff/eCyudZx9JDmkkkbV6PInzG4p8x3VqVJSFiMvnvlEKWuRob/1eaIetR31IYeAbm0NdOuHH8Qi+Rexi1wLlpzIo1gstHWBfZzy1+qHRV5A4TqPp15YzBPm0WSggW6PbSn+F4lf57VCnHF7p8SvzAA2ZZJPYJURt8X7bbg+H3i+PEjH9DXItNEqs2sNcug37xZQDLm7X0="
+  buildConfigField 'String', "ERROR_REPORTING_URL", "https://gitlab.com/thefinn93/signald/-/issues/new"
 }
 
 

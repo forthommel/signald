@@ -17,79 +17,84 @@
 
 package io.finn.signald;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import org.whispersystems.libsignal.util.guava.Optional;
+import org.whispersystems.signalservice.api.messages.SignalServiceAttachment;
+import org.whispersystems.signalservice.api.messages.SignalServiceAttachmentPointer;
+import org.whispersystems.util.Base64;
+
 import java.io.File;
 import java.io.IOException;
 
-import org.whispersystems.signalservice.api.messages.SignalServiceAttachment;
-import org.whispersystems.signalservice.api.messages.SignalServiceAttachmentPointer;
-import org.whispersystems.signalservice.internal.util.Base64;
-import org.whispersystems.libsignal.util.guava.Optional;
+public class JsonAttachment {
+  String contentType;
+  String id;
+  int size;
+  String storedFilename;
+  String filename;
+  String customFilename;
+  String caption;
+  int width;
+  int height;
+  boolean voiceNote;
+  String preview;
+  String key;
+  String digest;
+  String blurhash;
 
+  JsonAttachment() {}
 
-class JsonAttachment {
-    String contentType;
-    long id;
-    int size;
-    String storedFilename;
-    String filename;
-    String caption;
-    int width;
-    int height;
-    boolean voiceNote;
-    String preview;
-    String key;
-    String digest;
-    String blurhash;
+  JsonAttachment(String storedFilename) { this.filename = storedFilename; }
 
-    JsonAttachment() {}
+  JsonAttachment(SignalServiceAttachment attachment, String username) throws IOException, NoSuchAccountException {
+    this.contentType = attachment.getContentType();
+    final SignalServiceAttachmentPointer pointer = attachment.asPointer();
+    if (attachment.isPointer()) {
+      // unclear if this is the correct identifier or the right way to be storing attachments anymore
+      this.id = pointer.getRemoteId().toString();
+      this.key = Base64.encodeBytes(pointer.getKey());
 
-    JsonAttachment(String storedFilename) {
-        this.filename = storedFilename;
-    }
-
-    JsonAttachment(SignalServiceAttachment attachment, String username) throws IOException, NoSuchAccountException {
-        this.contentType = attachment.getContentType();
-        final SignalServiceAttachmentPointer pointer = attachment.asPointer();
-        if (attachment.isPointer()) {
-            this.id = pointer.getId();
-            this.key = Base64.encodeBytes(pointer.getKey());
-
-            if (pointer.getSize().isPresent()) {
-                this.size = pointer.getSize().get();
-            }
-
-            if(pointer.getPreview().isPresent()) {
-                this.preview = Base64.encodeBytes(pointer.getPreview().get());
-            }
-
-            if(pointer.getDigest().isPresent()) {
-                this.digest = Base64.encodeBytes(pointer.getDigest().get());
-            }
-
-            this.voiceNote = pointer.getVoiceNote();
-
-            this.width = pointer.getWidth();
-            this.height = pointer.getHeight();
-
-            if(pointer.getCaption().isPresent()) {
-                this.caption = pointer.getCaption().get();
-            }
-
-            if(pointer.getBlurHash().isPresent()) {
-                this.blurhash = pointer.getBlurHash().get();
-            }
-
-            File file = Manager.get(username).getAttachmentFile(pointer.getId());
-            if(file.exists()) {
-                this.storedFilename = file.toString();
-            }
-        }
-    }
-
-    public Optional<byte[]> getPreview() {
-      if(preview != null) {
-          return Optional.of(Base64.encodeBytesToBytes(preview.getBytes()));
+      if (pointer.getSize().isPresent()) {
+        this.size = pointer.getSize().get();
       }
-      return Optional.absent();
+
+      if (pointer.getPreview().isPresent()) {
+        this.preview = Base64.encodeBytes(pointer.getPreview().get());
+      }
+
+      if (pointer.getDigest().isPresent()) {
+        this.digest = Base64.encodeBytes(pointer.getDigest().get());
+      }
+
+      this.voiceNote = pointer.getVoiceNote();
+
+      this.width = pointer.getWidth();
+      this.height = pointer.getHeight();
+
+      if (pointer.getCaption().isPresent()) {
+        this.caption = pointer.getCaption().get();
+      }
+
+      if (pointer.getBlurHash().isPresent()) {
+        this.blurhash = pointer.getBlurHash().get();
+      }
+
+      if (pointer.getFileName().isPresent()) {
+        this.customFilename = pointer.getFileName().get();
+      }
+
+      File file = Manager.get(username).getAttachmentFile(id);
+      if (file.exists()) {
+        this.storedFilename = file.toString();
+      }
     }
+  }
+
+  @JsonIgnore
+  public Optional<byte[]> getPreview() {
+    if (preview != null) {
+      return Optional.of(Base64.encodeBytesToBytes(preview.getBytes()));
+    }
+    return Optional.absent();
+  }
 }

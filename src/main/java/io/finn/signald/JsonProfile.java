@@ -17,29 +17,47 @@
 
 package io.finn.signald;
 
+import org.signal.zkgroup.InvalidInputException;
+import org.signal.zkgroup.profiles.ProfileKey;
 import org.whispersystems.signalservice.api.crypto.InvalidCiphertextException;
 import org.whispersystems.signalservice.api.crypto.ProfileCipher;
 import org.whispersystems.signalservice.api.profiles.SignalServiceProfile;
-import org.whispersystems.signalservice.internal.util.Base64;
+import org.whispersystems.util.Base64;
 
 import java.io.IOException;
 
 class JsonProfile {
-    public String name;
-    public String avatar;
-    public String identity_key;
-    public String unidentified_access;
-    public boolean unrestricted_unidentified_access;
+  public String name;
+  public String avatar;
+  public String identity_key;
+  public String unidentified_access;
+  public boolean unrestricted_unidentified_access;
+  public JsonCapabilities capabilities;
 
-    JsonProfile(SignalServiceProfile p, byte[] profileKey) throws IOException, InvalidCiphertextException {
-        ProfileCipher profileCipher = new ProfileCipher(profileKey);
-        name = new String(profileCipher.decryptName(Base64.decode(p.getName())));
-        identity_key = p.getIdentityKey();
-        avatar = p.getAvatar();
-        unidentified_access = p.getUnidentifiedAccess();
-        if (p.isUnrestrictedUnidentifiedAccess()) {
-            unrestricted_unidentified_access = true;
-        }
-
+  JsonProfile(SignalServiceProfile p, byte[] profileKey) throws IOException, InvalidInputException {
+    ProfileCipher profileCipher = new ProfileCipher(new ProfileKey(profileKey));
+    try {
+      name = new String(profileCipher.decryptName(Base64.decode(p.getName())));
+    } catch (InvalidCiphertextException e) {
     }
+    identity_key = p.getIdentityKey();
+    avatar = p.getAvatar();
+    unidentified_access = p.getUnidentifiedAccess();
+    if (p.isUnrestrictedUnidentifiedAccess()) {
+      unrestricted_unidentified_access = true;
+    }
+    capabilities = new JsonCapabilities(p.getCapabilities());
+  }
+
+  public class JsonCapabilities {
+    public boolean uuid;
+    public boolean gv2;
+    public boolean storage;
+
+    public JsonCapabilities(SignalServiceProfile.Capabilities c) {
+      uuid = c.isUuid();
+      gv2 = c.isGv2();
+      storage = c.isStorage();
+    }
+  }
 }

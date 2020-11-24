@@ -17,18 +17,23 @@
 
 package io.finn.signald;
 
-import java.util.List;
+import io.finn.signald.clientprotocol.v1.JsonGroupV2Info;
+import io.finn.signald.storage.GroupInfo;
+
 import java.util.ArrayList;
-import org.asamk.signal.storage.groups.GroupInfo;
+import java.util.List;
 
 class JsonGroupList {
-    List<JsonGroupInfo> groups = new ArrayList<JsonGroupInfo>();
+  List<JsonGroupInfo> groups = new ArrayList<JsonGroupInfo>();
+  List<JsonGroupV2Info> groupsv2 = new ArrayList<>();
 
-    JsonGroupList(Manager m) {
-        for(GroupInfo group : m.getGroups()) {
-            if(group != null) {
-                this.groups.add(new JsonGroupInfo(group, m));
-            }
-        }
+  JsonGroupList(Manager m) {
+    for (GroupInfo group : m.getGroups()) {
+      if (group != null) {
+        this.groups.add(new JsonGroupInfo(group, m));
+      }
     }
+
+    groupsv2 = m.getGroupsV2Info();
+  }
 }

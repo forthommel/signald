@@ -17,36 +17,43 @@
 
 package io.finn.signald;
 
-import org.whispersystems.signalservice.internal.util.Base64;
+import org.whispersystems.util.Base64;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 
 public class Util {
-    public static String getSecret(int size) {
-        byte[] secret = getSecretBytes(size);
-        return Base64.encodeBytes(secret);
-    }
+  public static String getSecret(int size) {
+    byte[] secret = getSecretBytes(size);
+    return Base64.encodeBytes(secret);
+  }
 
-    public static byte[] getSecretBytes(int size) {
-        byte[] secret = new byte[size];
-        getSecureRandom().nextBytes(secret);
-        return secret;
-    }
+  public static byte[] getSecretBytes(int size) {
+    byte[] secret = new byte[size];
+    getSecureRandom().nextBytes(secret);
+    return secret;
+  }
 
-    private static SecureRandom getSecureRandom() {
-        try {
-            return SecureRandom.getInstance("SHA1PRNG");
-        } catch (NoSuchAlgorithmException e) {
-            throw new AssertionError(e);
-        }
+  private static SecureRandom getSecureRandom() {
+    try {
+      return SecureRandom.getInstance("SHA1PRNG");
+    } catch (NoSuchAlgorithmException e) {
+      throw new AssertionError(e);
     }
+  }
 
-    public static File createTempFile() throws IOException {
-        return File.createTempFile("signald_tmp_", ".tmp");
+  public static File createTempFile() throws IOException { return File.createTempFile("signald_tmp_", ".tmp"); }
+
+  public static String redact(String in) {
+    if (in == null) {
+      return "[null]";
     }
+    if (in.length() < 2) {
+      return new String(new char[in.length()]).replace("\0", "*");
+    }
+    int unredactAfter = in.length() - 2;
+    return new String(new char[unredactAfter]).replace("\0", "*") + in.substring(unredactAfter);
+  }
 }
